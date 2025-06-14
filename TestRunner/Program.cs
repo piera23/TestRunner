@@ -61,10 +61,16 @@ class Program
         {
             builder.AddConsole(options =>
             {
+                // Usa le nuove opzioni del formatter
+                options.FormatterName = "simple";
+            });
+            builder.AddSimpleConsole(options =>
+            {
                 options.IncludeScopes = false;
                 options.TimestampFormat = "[HH:mm:ss] ";
+                options.SingleLine = true;
             });
-            builder.SetMinimumLevel(LogLevel.Information);
+            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Information);
         });
 
         services.AddSingleton<ConfigService>();
@@ -231,10 +237,21 @@ class Program
                 // Configura logging verboso se richiesto
                 if (verbose)
                 {
-                    var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-                    loggerFactory.AddConsole(options =>
+                    // Riconfigura il logging per essere più verboso
+                    var newServices = new ServiceCollection();
+                    newServices.AddLogging(builder =>
                     {
-                        options.IncludeScopes = true;
+                        builder.AddConsole(options =>
+                        {
+                            options.FormatterName = "simple";
+                        });
+                        builder.AddSimpleConsole(options =>
+                        {
+                            options.IncludeScopes = true;
+                            options.TimestampFormat = "[HH:mm:ss] ";
+                            options.SingleLine = false;
+                        });
+                        builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug);
                     });
                 }
 

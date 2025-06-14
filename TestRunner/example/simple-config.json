@@ -1,0 +1,86 @@
+{
+  "projects": [
+    {
+      "name": "web-frontend",
+      "path": "./frontend",
+      "type": "WebApp",
+      "commands": [
+        "npm test",
+        "npm run build"
+      ],
+      "tags": ["frontend", "critical"],
+      "timeout_minutes": 10,
+      "enabled": true,
+      "environment": {
+        "NODE_ENV": "test"
+      }
+    },
+    {
+      "name": "mobile-app",
+      "path": "./mobile",
+      "type": "MobileApp",
+      "commands": [
+        "npm test",
+        "npx tsc --noEmit"
+      ],
+      "tags": ["mobile", "typescript"],
+      "timeout_minutes": 15,
+      "enabled": true
+    },
+    {
+      "name": "api-backend",
+      "path": "./api",
+      "type": "JavaScriptApp",
+      "commands": [
+        "npm test",
+        "npm run test:integration"
+      ],
+      "pre_commands": [
+        "npm install"
+      ],
+      "post_commands": [
+        "npm run cleanup"
+      ],
+      "tags": ["backend", "api"],
+      "timeout_minutes": 12,
+      "enabled": true,
+      "environment": {
+        "NODE_ENV": "test",
+        "PORT": "3001"
+      }
+    },
+    {
+      "name": "python-scripts",
+      "path": "./scripts",
+      "type": "PythonScript",
+      "commands": [
+        "python -m pytest",
+        "python -m flake8 ."
+      ],
+      "tags": ["backend", "python", "scripts"],
+      "timeout_minutes": 5,
+      "enabled": true,
+      "environment": {
+        "PYTHONPATH": "."
+      }
+    },
+    {
+      "name": "dotnet-service",
+      "path": "./services/user-service",
+      "type": "DotNetApp",
+      "commands": [
+        "dotnet test",
+        "dotnet build --configuration Release"
+      ],
+      "tags": ["backend", "dotnet", "microservice"],
+      "timeout_minutes": 8,
+      "enabled": true
+    }
+  ],
+  "parallel_execution": true,
+  "max_parallel_projects": 3,
+  "stop_on_first_failure": false,
+  "global_timeout_minutes": 60,
+  "output_format": "Console",
+  "report_file": null
+}
