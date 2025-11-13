@@ -8,6 +8,7 @@ Un potente ed estensibile test runner multipiattaforma per gestire ed eseguire t
 ## 📋 Indice
 
 - [Caratteristiche](#-caratteristiche)
+- [Web Dashboard](#-web-dashboard-new)
 - [Requisiti](#-requisiti)
 - [Installazione](#-installazione)
 - [Quick Start](#-quick-start)
@@ -30,6 +31,81 @@ Un potente ed estensibile test runner multipiattaforma per gestire ed eseguire t
 - **⚙️ Configurabile**: Timeout personalizzabili, variabili d'ambiente, pre/post comandi
 - **🔒 Sicuro**: Validazione robusta e gestione sicura dei comandi
 - **📈 CI/CD ready**: Output compatibile con Jenkins, GitLab CI, GitHub Actions
+
+## 🌐 Web Dashboard **NEW!**
+
+TestRunner include ora una **dashboard web interattiva** costruita con **Blazor Server** e **API REST**!
+
+### Caratteristiche Web Dashboard
+
+- **🖥️ UI Interattiva**: Dashboard moderna e responsive
+- **⚡ Real-time Updates**: Vedi l'esecuzione dei test in tempo reale con SignalR
+- **📡 REST API**: Integrazione completa con sistemi esterni
+- **📊 Visualizzazioni**: Grafici e statistiche in tempo reale
+- **⚙️ Gestione Config**: Crea, modifica ed elimina configurazioni dalla UI
+- **🔍 Auto-Detection UI**: Rileva progetti direttamente dall'interfaccia
+- **📜 Storico**: Visualizza esecuzioni precedenti
+
+### Quick Start Web Dashboard
+
+```bash
+# Avvia la web dashboard
+cd TestRunner
+dotnet run --project TestRunner.Web/TestRunner.Web.csproj
+
+# Accedi a:
+# http://localhost:5000
+# https://localhost:5001
+```
+
+### API REST Endpoints
+
+```bash
+# Stato esecuzione
+GET /api/testrunner/status
+
+# Esegui test
+POST /api/testrunner/run
+Content-Type: application/json
+{
+  "configName": "production",
+  "projects": ["frontend"],
+  "tags": ["critical"]
+}
+
+# Lista configurazioni
+GET /api/configuration
+
+# Auto-detection
+POST /api/configuration/auto-detect
+Content-Type: application/json
+{
+  "name": "my-project",
+  "projectPath": "/path/to/projects"
+}
+```
+
+### Real-time con SignalR
+
+```javascript
+// Connetti al SignalR Hub
+const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/testrunner-hub")
+    .build();
+
+// Ricevi aggiornamenti real-time
+connection.on("ProjectStarted", (name, type) => {
+    console.log(`Started: ${name}`);
+});
+
+connection.on("ProjectCompleted", (name, status) => {
+    console.log(`Completed: ${name} - ${status}`);
+});
+
+await connection.start();
+```
+
+📚 **[Guida Completa Web Dashboard →](docs/WEB_DASHBOARD_GUIDE.md)**
 
 ## 📦 Requisiti
 
