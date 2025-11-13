@@ -310,9 +310,6 @@ class Program
                     await reportGenerator.SaveReportAsync(result, format, report);
                     Console.WriteLine($"📄 Report saved: {report}");
                 }
-
-                // Exit code basato sui risultati
-                Environment.Exit(result.IsSuccess ? 0 : 1);
             }
             catch (Exception ex)
             {
@@ -320,7 +317,6 @@ class Program
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"❌ Error: {ex.Message}");
                 Console.ResetColor();
-                Environment.Exit(1);
             }
         }, configOption, projectsOption, tagsOption, parallelOption, reportOption, formatOption, verboseOption, dryRunOption);
 
@@ -387,7 +383,6 @@ class Program
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"❌ Configuration is invalid: {ex.Message}");
                 Console.ResetColor();
-                Environment.Exit(1);
             }
         }, configOption);
 

@@ -412,7 +412,8 @@ public class ProjectDetector
             if (packageJson.TryGetProperty("scripts", out var scriptsElement))
             {
                 return scriptsElement.EnumerateObject()
-                    .ToDictionary(prop => prop.Name, prop => (object)prop.Value.GetString()!);
+                    .Where(prop => prop.Value.ValueKind == JsonValueKind.String)
+                    .ToDictionary(prop => prop.Name, prop => (object)(prop.Value.GetString() ?? ""));
             }
         }
         catch

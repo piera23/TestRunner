@@ -248,8 +248,8 @@ public class TestExecutor
     }
 
     private async Task<CommandResult> ExecuteCommandAsync(
-        string command, 
-        ProjectConfig project, 
+        string command,
+        ProjectConfig project,
         CancellationToken cancellationToken)
     {
         var result = new CommandResult
@@ -261,10 +261,33 @@ public class TestExecutor
 
         try
         {
+            // Check cancellation before starting
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Validate working directory exists
+            if (!Directory.Exists(result.WorkingDirectory))
+            {
+                result.ExitCode = -1;
+                result.Error = $"Working directory does not exist: {result.WorkingDirectory}";
+                result.EndTime = DateTime.Now;
+                _logger.LogError("Working directory not found: {WorkingDirectory}", result.WorkingDirectory);
+                return result;
+            }
+
             using var process = new Process();
-            
+
             var (executable, arguments) = ParseCommand(command);
-            
+
+            // Validate executable is not empty
+            if (string.IsNullOrWhiteSpace(executable))
+            {
+                result.ExitCode = -1;
+                result.Error = "Command executable is empty or invalid";
+                result.EndTime = DateTime.Now;
+                _logger.LogError("Invalid command: {Command}", command);
+                return result;
+            }
+
             process.StartInfo = new ProcessStartInfo
             {
                 FileName = executable,
@@ -376,9 +399,13 @@ public class TestExecutor
         else
         {
             // Su Linux/Mac, alcuni comandi potrebbero necessitare bash
-            if (IsShellCommand(executable))
+            // NOTA: I comandi vengono da configurazione trusted, non da input utente
+            if (IsShellCommand(command))
             {
-                return ("/bin/bash", $"-c \"{command}\"");
+                // Usa singoli apici per proteggere da problemi con caratteri speciali
+                // Escape single quotes: 'cmd' -> 'cmd'\''
+                var escapedCommand = command.Replace("'", "'\\''");
+                return ("/bin/bash", $"-c '{escapedCommand}'");
             }
         }
 
@@ -393,8 +420,9 @@ public class TestExecutor
 
     private bool IsShellCommand(string command)
     {
-        // Comandi che potrebbero richiedere shell su Unix
-        return command.Contains("&&") || command.Contains("||") || command.Contains("|") || command.Contains(">");
+        // Comandi che richiedono shell su Unix (pipe, redirection, chaining)
+        return command.Contains("&&") || command.Contains("||") || command.Contains("|") ||
+               command.Contains(">") || command.Contains("<") || command.Contains(";");
     }
 
     private List<ProjectConfig> FilterProjects(

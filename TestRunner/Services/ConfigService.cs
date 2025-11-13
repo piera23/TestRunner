@@ -18,7 +18,7 @@ public class ConfigService
         _jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            PropertyNamingPolicy = null, // Use JsonPropertyName attributes from models
             AllowTrailingCommas = true,
             ReadCommentHandling = JsonCommentHandling.Skip
         };
