@@ -7,14 +7,16 @@ namespace TestRunner.Web.Services;
 /// <summary>
 /// Service for executing tests with real-time notifications
 /// </summary>
-public class TestExecutionService
+public class TestExecutionService : IDisposable
 {
     private readonly TestExecutor _testExecutor;
     private readonly IHubContext<TestRunnerHub> _hubContext;
     private readonly ILogger<TestExecutionService> _logger;
     private readonly SemaphoreSlim _executionLock = new(1, 1);
+    private CancellationTokenSource? _currentCancellationTokenSource;
     private TestExecutionResult? _currentExecution;
     private bool _isRunning;
+    private bool _disposed;
 
     public TestExecutionService(
         TestExecutor testExecutor,
@@ -38,6 +40,8 @@ public class TestExecutionService
         string[]? tagFilter = null,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         await _executionLock.WaitAsync(cancellationToken);
         try
         {
@@ -49,6 +53,9 @@ public class TestExecutionService
             _isRunning = true;
             _currentExecution = null;
 
+            // Create linked cancellation token
+            _currentCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
             _logger.LogInformation("Starting test execution");
 
             // Notify start
@@ -56,7 +63,11 @@ public class TestExecutionService
                 DateTime.Now, config.Projects.Count, cancellationToken);
 
             // Execute tests with monitoring
-            var result = await ExecuteWithMonitoringAsync(config, projectFilter, tagFilter, cancellationToken);
+            var result = await ExecuteWithMonitoringAsync(
+                config,
+                projectFilter,
+                tagFilter,
+                _currentCancellationTokenSource.Token);
 
             _currentExecution = result;
 
@@ -68,9 +79,17 @@ public class TestExecutionService
 
             return result;
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Test execution was cancelled");
+            await _hubContext.Clients.All.SendAsync("ExecutionCancelled", cancellationToken);
+            throw;
+        }
         finally
         {
             _isRunning = false;
+            _currentCancellationTokenSource?.Dispose();
+            _currentCancellationTokenSource = null;
             _executionLock.Release();
         }
     }
@@ -103,8 +122,19 @@ public class TestExecutionService
                 await _hubContext.Clients.All.SendAsync("ProjectStarted",
                     project.Name, project.Type.ToString(), cancellationToken);
 
-                // Execute project
-                var projectResult = await ExecuteProjectWithNotificationsAsync(project, cancellationToken);
+                // Execute project using the real TestExecutor
+                var projectResult = await _testExecutor.ExecuteProjectAsync(project, cancellationToken);
+
+                // Send command results via SignalR
+                foreach (var commandResult in projectResult.CommandResults)
+                {
+                    await _hubContext.Clients.All.SendAsync("CommandCompleted",
+                        project.Name,
+                        commandResult.Command,
+                        commandResult.ExitCode,
+                        commandResult.Output ?? string.Empty,
+                        cancellationToken);
+                }
 
                 executionResult.ProjectResults.Add(projectResult);
 
@@ -128,76 +158,19 @@ public class TestExecutionService
 
             return executionResult;
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Test execution was cancelled during monitoring");
+            executionResult.EndTime = DateTime.Now;
+            executionResult.CalculateSummary();
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during test execution");
             executionResult.EndTime = DateTime.Now;
             executionResult.CalculateSummary();
             throw;
-        }
-    }
-
-    private async Task<TestResult> ExecuteProjectWithNotificationsAsync(
-        ProjectConfig project,
-        CancellationToken cancellationToken)
-    {
-        var result = new TestResult
-        {
-            ProjectName = project.Name,
-            ProjectPath = project.Path,
-            ProjectType = project.Type,
-            StartTime = DateTime.Now,
-            Status = TestStatus.Running,
-            Tags = project.Tags
-        };
-
-        try
-        {
-            if (!project.Enabled)
-            {
-                result.Status = TestStatus.Skipped;
-                result.EndTime = DateTime.Now;
-                return result;
-            }
-
-            // Execute commands
-            foreach (var command in project.Commands)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    break;
-
-                // Notify command start
-                await _hubContext.Clients.All.SendAsync("CommandStarted",
-                    project.Name, command, cancellationToken);
-
-                // For real execution, you would use TestExecutor here
-                // This is a simplified version
-                await Task.Delay(1000, cancellationToken); // Simulate execution
-
-                // Notify command completion
-                await _hubContext.Clients.All.SendAsync("CommandCompleted",
-                    project.Name, command, 0, cancellationToken);
-            }
-
-            result.Status = TestStatus.Passed;
-            result.EndTime = DateTime.Now;
-
-            return result;
-        }
-        catch (OperationCanceledException)
-        {
-            result.Status = TestStatus.Error;
-            result.ErrorMessage = "Operation was cancelled";
-            result.EndTime = DateTime.Now;
-            return result;
-        }
-        catch (Exception ex)
-        {
-            result.Status = TestStatus.Error;
-            result.ErrorMessage = ex.Message;
-            result.EndTime = DateTime.Now;
-            _logger.LogError(ex, "Error executing project {ProjectName}", project.Name);
-            return result;
         }
     }
 
@@ -226,13 +199,29 @@ public class TestExecutionService
     /// <summary>
     /// Cancel current execution
     /// </summary>
-    public async Task CancelExecutionAsync()
+    public Task CancelExecutionAsync()
     {
-        if (_isRunning)
+        if (_isRunning && _currentCancellationTokenSource != null)
         {
             _logger.LogWarning("Cancelling test execution");
-            await _hubContext.Clients.All.SendAsync("ExecutionCancelled");
-            // Actual cancellation would use CancellationTokenSource
+            _currentCancellationTokenSource.Cancel();
         }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Dispose resources
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _currentCancellationTokenSource?.Dispose();
+        _executionLock.Dispose();
+        _disposed = true;
+
+        GC.SuppressFinalize(this);
     }
 }

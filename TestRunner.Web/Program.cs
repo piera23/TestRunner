@@ -20,9 +20,9 @@ builder.Services.AddSingleton<TestExecutor>();
 builder.Services.AddSingleton<ReportGenerator>();
 
 // Add Web-specific services
-builder.Services.AddSingleton<TestRunnerHub>();
-builder.Services.AddScoped<TestExecutionService>();
-builder.Services.AddScoped<ConfigurationService>();
+// Note: SignalR Hubs should NOT be registered - they are managed by the framework
+builder.Services.AddSingleton<TestExecutionService>();
+builder.Services.AddSingleton<ConfigurationService>();
 
 // Add logging
 builder.Services.AddLogging(logging =>
@@ -31,14 +31,31 @@ builder.Services.AddLogging(logging =>
     logging.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add CORS for API
+// Add CORS for API - Configured for security
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        // In development, allow any origin for testing
+        // In production, this should be configured with specific allowed origins
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            // In production, restrict to specific origins
+            // Configure via appsettings.json or environment variables
+            var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+                ?? new[] { "https://yourdomain.com" };
+
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 
