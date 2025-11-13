@@ -1,5 +1,43 @@
+# Build outputs
 bin/
 obj/
 /packages/
+*.dll
+*.exe
+*.pdb
+
+# IDE files
 riderModule.iml
 /_ReSharper.Caches/
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# TestRunner specific
+testrunner-results/
+*.testrunner.json.backup
+test-results/
+reports/
+
+# Temporary files
+*.tmp
+*.temp
+*~
