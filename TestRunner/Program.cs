@@ -282,8 +282,8 @@ class Program
                 {
                     Console.WriteLine("\n🔍 DRY RUN - No tests will be executed");
                     var filteredProjects = configuration.Projects
-                        .Where(p => projects?.Length == 0 || projects?.Contains(p.Name, StringComparer.OrdinalIgnoreCase) == true)
-                        .Where(p => tags?.Length == 0 || p.Tags.Any(t => tags?.Contains(t, StringComparer.OrdinalIgnoreCase) == true))
+                        .Where(p => projects == null || projects.Length == 0 || projects.Contains(p.Name, StringComparer.OrdinalIgnoreCase))
+                        .Where(p => tags == null || tags.Length == 0 || p.Tags.Any(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)))
                         .ToList();
 
                     foreach (var project in filteredProjects)

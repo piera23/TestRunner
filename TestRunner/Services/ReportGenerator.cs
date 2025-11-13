@@ -446,13 +446,13 @@ public class ReportGenerator
                         
                         if (!string.IsNullOrEmpty(cmd.Output))
                         {
-                            sb.AppendLine($@"<div class=""command-output"">{System.Web.HttpUtility.HtmlEncode(cmd.Output)}</div>");
+                            sb.AppendLine($@"<div class=""command-output"">{System.Net.WebUtility.HtmlEncode(cmd.Output)}</div>");
                         }
-                        
+
                         if (!string.IsNullOrEmpty(cmd.Error))
                         {
                             sb.AppendLine($@"<div class=""command-output"" style=""border-left: 4px solid #dc3545;"">
-                                <strong>STDERR:</strong><br>{System.Web.HttpUtility.HtmlEncode(cmd.Error)}
+                                <strong>STDERR:</strong><br>{System.Net.WebUtility.HtmlEncode(cmd.Error)}
                             </div>");
                         }
                         
