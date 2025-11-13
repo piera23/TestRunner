@@ -1,0 +1,282 @@
+@page "/"
+@inject ConfigurationService ConfigService
+@inject TestExecutionService ExecutionService
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - TestRunner</PageTitle>
+
+<div class="dashboard-header mb-4">
+    <h1><i class="fas fa-tachometer-alt text-primary"></i> Dashboard</h1>
+    <p class="lead text-muted">Welcome to TestRunner - Manage and execute your test suites</p>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Total Configurations Card -->
+    <div class="col-md-3">
+        <div class="card dashboard-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-muted">Configurations</h6>
+                        <h2 class="mb-0">@configCount</h2>
+                    </div>
+                    <div class="card-icon bg-primary">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/configurations" class="text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Projects Card -->
+    <div class="col-md-3">
+        <div class="card dashboard-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-muted">Total Projects</h6>
+                        <h2 class="mb-0">@totalProjects</h2>
+                    </div>
+                    <div class="card-icon bg-info">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/projects" class="text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Status Card -->
+    <div class="col-md-3">
+        <div class="card dashboard-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-muted">Status</h6>
+                        <h2 class="mb-0">
+                            @if (ExecutionService.IsRunning)
+                            {
+                                <span class="badge bg-warning">Running</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">Ready</span>
+                            }
+                        </h2>
+                    </div>
+                    <div class="card-icon @(ExecutionService.IsRunning ? "bg-warning" : "bg-success")">
+                        <i class="fas @(ExecutionService.IsRunning ? "fa-spinner fa-spin" : "fa-check-circle")"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                @if (!ExecutionService.IsRunning)
+                {
+                    <a href="/run" class="text-decoration-none">
+                        Run tests <i class="fas fa-arrow-right"></i>
+                    </a>
+                }
+                else
+                {
+                    <span class="text-muted">Execution in progress...</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Execution Card -->
+    <div class="col-md-3">
+        <div class="card dashboard-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-muted">Last Execution</h6>
+                        <h2 class="mb-0">
+                            @if (ExecutionService.CurrentExecution != null)
+                            {
+                                @if (ExecutionService.CurrentExecution.IsSuccess)
+                                {
+                                    <i class="fas fa-check-circle text-success"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </h2>
+                    </div>
+                    <div class="card-icon bg-secondary">
+                        <i class="fas fa-history"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/history" class="text-decoration-none">
+                    View history <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-4 mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-bolt"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-3 flex-wrap">
+                    <button class="btn btn-primary" @onclick="NavigateToRun">
+                        <i class="fas fa-play"></i> Run Tests
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick="NavigateToConfigurations">
+                        <i class="fas fa-plus"></i> New Configuration
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="NavigateToProjects">
+                        <i class="fas fa-search"></i> Detect Projects
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Configurations -->
+@if (recentConfigs.Any())
+{
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-clock"></i> Recent Configurations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Projects</th>
+                                    <th>Enabled</th>
+                                    <th>Last Modified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var config in recentConfigs.Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-file-alt text-primary me-2"></i>
+                                            <strong>@config.Name</strong>
+                                        </td>
+                                        <td>@config.ProjectCount</td>
+                                        <td>@config.EnabledProjects</td>
+                                        <td>@config.LastModified.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => RunConfiguration(config.Name)">
+                                                <i class="fas fa-play"></i> Run
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Getting Started -->
+@if (configCount == 0)
+{
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-primary">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-rocket fa-4x text-primary mb-3"></i>
+                    <h3>Get Started with TestRunner</h3>
+                    <p class="lead text-muted mb-4">You don't have any configurations yet. Create your first one to start testing!</p>
+                    <div class="d-flex gap-3 justify-content-center">
+                        <button class="btn btn-primary btn-lg" @onclick="NavigateToConfigurations">
+                            <i class="fas fa-plus"></i> Create Configuration
+                        </button>
+                        <button class="btn btn-outline-primary btn-lg" @onclick="NavigateToProjects">
+                            <i class="fas fa-magic"></i> Auto-Detect Projects
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private int configCount = 0;
+    private int totalProjects = 0;
+    private List<ConfigInfo> recentConfigs = new();
+    private System.Timers.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+
+        // Refresh every 5 seconds
+        timer = new System.Timers.Timer(5000);
+        timer.Elapsed += async (sender, e) => await InvokeAsync(async () =>
+        {
+            await LoadDataAsync();
+            StateHasChanged();
+        });
+        timer.Start();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        recentConfigs = await ConfigService.GetAllConfigurationsAsync();
+        configCount = recentConfigs.Count;
+        totalProjects = recentConfigs.Sum(c => c.ProjectCount);
+    }
+
+    private void NavigateToRun()
+    {
+        Navigation.NavigateTo("/run");
+    }
+
+    private void NavigateToConfigurations()
+    {
+        Navigation.NavigateTo("/configurations");
+    }
+
+    private void NavigateToProjects()
+    {
+        Navigation.NavigateTo("/projects");
+    }
+
+    private void RunConfiguration(string configName)
+    {
+        Navigation.NavigateTo($"/run?config={configName}");
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}

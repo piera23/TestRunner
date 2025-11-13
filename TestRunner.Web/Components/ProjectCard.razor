@@ -1,0 +1,232 @@
+@using TestRunner.Models
+
+<div class="card h-100 project-card @(Project.Enabled ? "" : "disabled") @(IsRunning ? "running" : "")">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="flex-grow-1">
+                <h5 class="card-title mb-1">
+                    @if (ShowStatus)
+                    {
+                        @if (IsRunning)
+                        {
+                            <span class="spinner-border spinner-border-sm text-primary me-2"></span>
+                        }
+                        else if (LastRunSuccess.HasValue)
+                        {
+                            @if (LastRunSuccess.Value)
+                            {
+                                <i class="fas fa-check-circle text-success me-2"></i>
+                            }
+                            else
+                            {
+                                <i class="fas fa-times-circle text-danger me-2"></i>
+                            }
+                        }
+                    }
+                    @Project.Name
+                </h5>
+                @if (!string.IsNullOrEmpty(Description))
+                {
+                    <p class="text-muted small mb-0">@Description</p>
+                }
+            </div>
+            <span class="badge @GetProjectTypeBadgeClass()">
+                @GetProjectTypeIcon() @Project.Type
+            </span>
+        </div>
+
+        <div class="mb-3">
+            <small class="text-muted">
+                <i class="fas fa-folder me-1"></i>
+                @Project.WorkingDirectory
+            </small>
+        </div>
+
+        @if (Project.Tags.Any())
+        {
+            <div class="mb-3">
+                @foreach (var tag in Project.Tags)
+                {
+                    <span class="badge bg-secondary me-1">@tag</span>
+                }
+            </div>
+        }
+
+        @if (ShowCommands)
+        {
+            <div class="mb-3">
+                <small class="text-muted d-block mb-1">
+                    <i class="fas fa-terminal me-1"></i>
+                    Commands (@Project.Commands.Count):
+                </small>
+                @foreach (var cmd in Project.Commands.Take(MaxCommandsDisplay))
+                {
+                    <code class="d-block small mb-1 command-line">@cmd.Command</code>
+                }
+                @if (Project.Commands.Count > MaxCommandsDisplay)
+                {
+                    <small class="text-muted">...and @(Project.Commands.Count - MaxCommandsDisplay) more</small>
+                }
+            </div>
+        }
+
+        @if (ShowProgress && IsRunning)
+        {
+            <div class="mb-3">
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         style="width: @Progress%">
+                        @Progress%
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="d-flex justify-content-between align-items-center">
+            @if (ShowEnabledToggle)
+            {
+                <div class="form-check form-switch">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           checked="@Project.Enabled"
+                           @onchange="OnEnabledChanged"
+                           id="enabled-@Project.Name" />
+                    <label class="form-check-label" for="enabled-@Project.Name">
+                        Enabled
+                    </label>
+                </div>
+            }
+            else
+            {
+                <div></div>
+            }
+
+            @if (ShowActions)
+            {
+                <div class="btn-group btn-group-sm">
+                    @if (OnRunClicked.HasDelegate)
+                    {
+                        <button class="btn btn-outline-primary"
+                                @onclick="() => OnRunClicked.InvokeAsync(Project)"
+                                disabled="@IsRunning">
+                            <i class="fas @(IsRunning ? "fa-spinner fa-spin" : "fa-play") me-1"></i>
+                            @(IsRunning ? "Running" : "Run")
+                        </button>
+                    }
+                    @if (OnEditClicked.HasDelegate)
+                    {
+                        <button class="btn btn-outline-secondary"
+                                @onclick="() => OnEditClicked.InvokeAsync(Project)">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    }
+                    @if (OnDeleteClicked.HasDelegate)
+                    {
+                        <button class="btn btn-outline-danger"
+                                @onclick="() => OnDeleteClicked.InvokeAsync(Project)">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(StatusMessage))
+        {
+            <div class="alert alert-info alert-sm mt-3 mb-0">
+                <small>@StatusMessage</small>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public TestProject Project { get; set; } = null!;
+
+    [Parameter]
+    public string Description { get; set; } = "";
+
+    [Parameter]
+    public bool ShowCommands { get; set; } = true;
+
+    [Parameter]
+    public int MaxCommandsDisplay { get; set; } = 3;
+
+    [Parameter]
+    public bool ShowEnabledToggle { get; set; } = true;
+
+    [Parameter]
+    public bool ShowActions { get; set; } = true;
+
+    [Parameter]
+    public bool ShowStatus { get; set; } = true;
+
+    [Parameter]
+    public bool ShowProgress { get; set; } = false;
+
+    [Parameter]
+    public bool IsRunning { get; set; } = false;
+
+    [Parameter]
+    public int Progress { get; set; } = 0;
+
+    [Parameter]
+    public bool? LastRunSuccess { get; set; }
+
+    [Parameter]
+    public string StatusMessage { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<TestProject> OnRunClicked { get; set; }
+
+    [Parameter]
+    public EventCallback<TestProject> OnEditClicked { get; set; }
+
+    [Parameter]
+    public EventCallback<TestProject> OnDeleteClicked { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnEnabledToggled { get; set; }
+
+    private async Task OnEnabledChanged(ChangeEventArgs e)
+    {
+        if (e.Value is bool enabled)
+        {
+            await OnEnabledToggled.InvokeAsync(enabled);
+        }
+    }
+
+    private string GetProjectTypeBadgeClass()
+    {
+        return Project.Type switch
+        {
+            ProjectType.DotNet => "bg-primary",
+            ProjectType.Node => "bg-success",
+            ProjectType.Python => "bg-warning text-dark",
+            ProjectType.Go => "bg-info text-dark",
+            ProjectType.Rust => "bg-danger",
+            ProjectType.Java => "bg-secondary",
+            ProjectType.PHP => "bg-dark",
+            ProjectType.Ruby => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetProjectTypeIcon()
+    {
+        return Project.Type switch
+        {
+            ProjectType.DotNet => "🔷",
+            ProjectType.Node => "🟢",
+            ProjectType.Python => "🐍",
+            ProjectType.Go => "🐹",
+            ProjectType.Rust => "🦀",
+            ProjectType.Java => "☕",
+            ProjectType.PHP => "🐘",
+            ProjectType.Ruby => "💎",
+            _ => "📦"
+        };
+    }
+}

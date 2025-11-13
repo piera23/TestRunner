@@ -1,0 +1,348 @@
+@page "/run"
+@inject ConfigurationService ConfigService
+@inject TestExecutionService ExecutionService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Run Tests - TestRunner</PageTitle>
+
+<div class="mb-4">
+    <h1><i class="fas fa-play-circle text-primary"></i> Run Tests</h1>
+    <p class="text-muted">Execute test suites with real-time feedback</p>
+</div>
+
+@if (!ExecutionService.IsRunning)
+{
+    <!-- Configuration Selection -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration</h5>
+        </div>
+        <div class="card-body">
+            @if (!configurations.Any())
+            {
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    No configurations found. Please <a href="/configurations" class="alert-link">create one first</a>.
+                </div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Configuration</label>
+                        <select class="form-select form-select-lg" @bind="selectedConfig">
+                            <option value="">-- Select Configuration --</option>
+                            @foreach (var config in configurations)
+                            {
+                                <option value="@config.Name">@config.Name (@config.EnabledProjects projects)</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(selectedConfig))
+                    {
+                        var config = configurations.FirstOrDefault(c => c.Name == selectedConfig);
+                        if (config?.Config != null)
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label">Configuration Details</label>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Total Projects:</span>
+                                            <strong>@config.ProjectCount</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Enabled:</span>
+                                            <strong>@config.EnabledProjects</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span>Parallel Execution:</span>
+                                            <strong>@(config.Config.ParallelExecution ? "Yes" : "No")</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Filters -->
+                @if (!string.IsNullOrEmpty(selectedConfig))
+                {
+                    var config = configurations.FirstOrDefault(c => c.Name == selectedConfig);
+                    if (config?.Config != null)
+                    {
+                        <div class="row g-3 mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Filter by Projects</label>
+                                <select class="form-select" multiple @bind="selectedProjects">
+                                    @foreach (var project in config.Config.Projects.Where(p => p.Enabled))
+                                    {
+                                        <option value="@project.Name">@project.Name (@project.Type)</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple</small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Filter by Tags</label>
+                                <input type="text" class="form-control" @bind="tagsInput" placeholder="critical,backend,frontend" />
+                                <small class="form-text text-muted">Comma-separated tags</small>
+                            </div>
+                        </div>
+                    }
+                }
+
+                <!-- Run Button -->
+                <div class="mt-4">
+                    <button class="btn btn-primary btn-lg" @onclick="RunTests" disabled="@(string.IsNullOrEmpty(selectedConfig))">
+                        <i class="fas fa-play"></i> Run Tests
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <!-- Execution Progress -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">
+                <i class="fas fa-spinner fa-spin"></i> Execution in Progress
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Status:</span>
+                    <strong>Running...</strong>
+                </div>
+                <div class="progress" style="height: 30px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                         role="progressbar"
+                         style="width: @(progress)%">
+                        @progress%
+                    </div>
+                </div>
+            </div>
+
+            @if (currentProject != null)
+            {
+                <div class="alert alert-info">
+                    <strong>Current Project:</strong> @currentProject
+                </div>
+            }
+
+            <div class="mt-3">
+                <button class="btn btn-danger" @onclick="CancelExecution">
+                    <i class="fas fa-stop"></i> Cancel Execution
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time Output -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-terminal"></i> Output</h5>
+        </div>
+        <div class="card-body">
+            <div class="console-output" style="max-height: 400px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: 'Courier New', monospace;">
+                @foreach (var line in outputLines)
+                {
+                    <div>@line</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Results -->
+@if (ExecutionService.CurrentExecution != null && !ExecutionService.IsRunning)
+{
+    var execution = ExecutionService.CurrentExecution;
+    <div class="card mt-4">
+        <div class="card-header @(execution.IsSuccess ? "bg-success" : "bg-danger") text-white">
+            <h5 class="mb-0">
+                <i class="fas @(execution.IsSuccess ? "fa-check-circle" : "fa-times-circle")"></i>
+                Execution @(execution.IsSuccess ? "Completed Successfully" : "Failed")
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-success">@execution.Summary.PassedProjects</h3>
+                        <p class="text-muted">Passed</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-danger">@execution.Summary.FailedProjects</h3>
+                        <p class="text-muted">Failed</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-warning">@execution.Summary.SkippedProjects</h3>
+                        <p class="text-muted">Skipped</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <h3 class="text-primary">@execution.TotalDuration.TotalSeconds.ToString("F1")s</h3>
+                        <p class="text-muted">Duration</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Results -->
+            <hr />
+            <h6>Project Results:</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var result in execution.ProjectResults)
+                        {
+                            <tr>
+                                <td>@result.ProjectName</td>
+                                <td>
+                                    @if (result.Status == TestStatus.Passed)
+                                    {
+                                        <span class="badge bg-success">Passed</span>
+                                    }
+                                    else if (result.Status == TestStatus.Failed)
+                                    {
+                                        <span class="badge bg-danger">Failed</span>
+                                    }
+                                    else if (result.Status == TestStatus.Skipped)
+                                    {
+                                        <span class="badge bg-warning">Skipped</span>
+                                    }
+                                </td>
+                                <td>@result.Duration.TotalSeconds.ToString("F1")s</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="btn btn-primary" @onclick="Reset">
+                <i class="fas fa-redo"></i> Run Again
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "config")]
+    public string? InitialConfig { get; set; }
+
+    private List<ConfigInfo> configurations = new();
+    private string selectedConfig = "";
+    private string[] selectedProjects = Array.Empty<string>();
+    private string tagsInput = "";
+    private int progress = 0;
+    private string? currentProject;
+    private List<string> outputLines = new();
+    private System.Timers.Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        configurations = await ConfigService.GetAllConfigurationsAsync();
+
+        if (!string.IsNullOrEmpty(InitialConfig))
+        {
+            selectedConfig = InitialConfig;
+        }
+
+        // Setup refresh timer
+        refreshTimer = new System.Timers.Timer(500);
+        refreshTimer.Elapsed += async (s, e) => await InvokeAsync(async () =>
+        {
+            await UpdateProgress();
+            StateHasChanged();
+        });
+        refreshTimer.Start();
+    }
+
+    private async Task RunTests()
+    {
+        try
+        {
+            var config = await ConfigService.GetConfigurationAsync(selectedConfig);
+            if (config == null)
+            {
+                await JS.InvokeVoidAsync("alert", "Configuration not found");
+                return;
+            }
+
+            outputLines.Clear();
+            progress = 0;
+            currentProject = null;
+
+            var projects = selectedProjects.Any() ? selectedProjects : null;
+            var tags = !string.IsNullOrWhiteSpace(tagsInput)
+                ? tagsInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : null;
+
+            outputLines.Add($"[{DateTime.Now:HH:mm:ss}] Starting execution...");
+            outputLines.Add($"[{DateTime.Now:HH:mm:ss}] Configuration: {selectedConfig}");
+
+            // Start execution in background
+            _ = Task.Run(async () =>
+            {
+                await ExecutionService.ExecuteTestsAsync(config, projects, tags);
+            });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateProgress()
+    {
+        if (ExecutionService.IsRunning && ExecutionService.CurrentExecution != null)
+        {
+            var execution = ExecutionService.CurrentExecution;
+            if (execution.Summary.TotalProjects > 0)
+            {
+                var completed = execution.Summary.PassedProjects +
+                               execution.Summary.FailedProjects +
+                               execution.Summary.SkippedProjects;
+                progress = (int)((double)completed / execution.Summary.TotalProjects * 100);
+            }
+        }
+    }
+
+    private async Task CancelExecution()
+    {
+        await ExecutionService.CancelExecutionAsync();
+        outputLines.Add($"[{DateTime.Now:HH:mm:ss}] Cancellation requested...");
+    }
+
+    private void Reset()
+    {
+        outputLines.Clear();
+        progress = 0;
+        currentProject = null;
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

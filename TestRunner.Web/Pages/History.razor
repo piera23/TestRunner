@@ -1,0 +1,328 @@
+@page "/history"
+@using TestRunner.Models
+@using TestRunner.Web.Services
+@inject ConfigurationService ConfigService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Execution History - TestRunner</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">
+                <i class="fas fa-history me-2"></i>
+                Execution History
+            </h1>
+            <p class="text-muted">View past test execution results and performance metrics</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-outline-danger" @onclick="ClearHistory">
+                <i class="fas fa-trash me-2"></i>Clear History
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Configuration</label>
+                    <select class="form-select" @bind="selectedConfig">
+                        <option value="">All Configurations</option>
+                        @foreach (var config in configurations)
+                        {
+                            <option value="@config.Name">@config.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="selectedStatus">
+                        <option value="">All Statuses</option>
+                        <option value="Success">Success</option>
+                        <option value="Failed">Failed</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date Range</label>
+                    <select class="form-select" @bind="selectedDateRange">
+                        <option value="today">Today</option>
+                        <option value="week">Last 7 Days</option>
+                        <option value="month">Last 30 Days</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="ApplyFilters">
+                        <i class="fas fa-filter me-2"></i>Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Executions</h6>
+                    <h3 class="mb-0">@filteredExecutions.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Success Rate</h6>
+                    <h3 class="mb-0 text-success">@GetSuccessRate()%</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Avg Duration</h6>
+                    <h3 class="mb-0">@GetAverageDuration()s</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Failed</h6>
+                    <h3 class="mb-0 text-danger">@GetFailedCount()</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution List -->
+    @if (!filteredExecutions.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No execution history found</h5>
+                <p class="text-muted">Run some tests to see execution history here</p>
+                <a href="/run" class="btn btn-primary">
+                    <i class="fas fa-play me-2"></i>Run Tests
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Configuration</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Projects</th>
+                                <th>Success Rate</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var execution in filteredExecutions.Take(50))
+                            {
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">
+                                            @execution.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <strong>@execution.ConfigName</strong>
+                                    </td>
+                                    <td>
+                                        @if (execution.Status == "Success")
+                                        {
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>Success
+                                            </span>
+                                        }
+                                        else if (execution.Status == "Failed")
+                                        {
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-times-circle me-1"></i>Failed
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-exclamation-circle me-1"></i>Cancelled
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>@execution.Duration.ToString("F1")s</td>
+                                    <td>@execution.TotalProjects projects</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress flex-grow-1 me-2" style="height: 20px; min-width: 100px;">
+                                                <div class="progress-bar @(execution.SuccessRate >= 80 ? "bg-success" : execution.SuccessRate >= 50 ? "bg-warning" : "bg-danger")"
+                                                     role="progressbar"
+                                                     style="width: @(execution.SuccessRate)%">
+                                                    @execution.SuccessRate.ToString("F0")%
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">
+                                                @execution.PassedProjects/@execution.TotalProjects
+                                            </small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewDetails(execution.Id)">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ConfigInfo> configurations = new();
+    private List<ExecutionHistoryItem> executions = new();
+    private List<ExecutionHistoryItem> filteredExecutions = new();
+
+    private string selectedConfig = "";
+    private string selectedStatus = "";
+    private string selectedDateRange = "week";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        ApplyFilters();
+    }
+
+    private async Task LoadData()
+    {
+        configurations = await ConfigService.GetAllConfigurationsAsync();
+        executions = GenerateMockHistory(); // In production, load from database
+    }
+
+    private void ApplyFilters()
+    {
+        filteredExecutions = executions.AsEnumerable();
+
+        // Filter by configuration
+        if (!string.IsNullOrEmpty(selectedConfig))
+        {
+            filteredExecutions = filteredExecutions.Where(e => e.ConfigName == selectedConfig).ToList();
+        }
+
+        // Filter by status
+        if (!string.IsNullOrEmpty(selectedStatus))
+        {
+            filteredExecutions = filteredExecutions.Where(e => e.Status == selectedStatus).ToList();
+        }
+
+        // Filter by date range
+        var now = DateTime.Now;
+        filteredExecutions = selectedDateRange switch
+        {
+            "today" => filteredExecutions.Where(e => e.Timestamp.Date == now.Date).ToList(),
+            "week" => filteredExecutions.Where(e => e.Timestamp >= now.AddDays(-7)).ToList(),
+            "month" => filteredExecutions.Where(e => e.Timestamp >= now.AddDays(-30)).ToList(),
+            _ => filteredExecutions.ToList()
+        };
+
+        // Sort by timestamp descending
+        filteredExecutions = filteredExecutions.OrderByDescending(e => e.Timestamp).ToList();
+    }
+
+    private string GetSuccessRate()
+    {
+        if (!filteredExecutions.Any()) return "0";
+        var successCount = filteredExecutions.Count(e => e.Status == "Success");
+        return ((double)successCount / filteredExecutions.Count * 100).ToString("F1");
+    }
+
+    private string GetAverageDuration()
+    {
+        if (!filteredExecutions.Any()) return "0";
+        return filteredExecutions.Average(e => e.Duration).ToString("F1");
+    }
+
+    private int GetFailedCount()
+    {
+        return filteredExecutions.Count(e => e.Status == "Failed");
+    }
+
+    private async Task ClearHistory()
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to clear all execution history?");
+        if (confirmed)
+        {
+            executions.Clear();
+            ApplyFilters();
+        }
+    }
+
+    private void ViewDetails(string executionId)
+    {
+        // TODO: Navigate to detailed view or show modal with execution details
+        Console.WriteLine($"Viewing details for execution: {executionId}");
+    }
+
+    // Generate mock history data for demonstration
+    private List<ExecutionHistoryItem> GenerateMockHistory()
+    {
+        var random = new Random();
+        var history = new List<ExecutionHistoryItem>();
+        var configNames = configurations.Select(c => c.Name).ToList();
+
+        if (!configNames.Any())
+        {
+            configNames = new List<string> { "development", "staging", "production" };
+        }
+
+        for (int i = 0; i < 50; i++)
+        {
+            var totalProjects = random.Next(3, 15);
+            var passedProjects = random.Next(0, totalProjects + 1);
+            var status = passedProjects == totalProjects ? "Success" : "Failed";
+
+            history.Add(new ExecutionHistoryItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.Now.AddDays(-random.Next(0, 60)).AddHours(-random.Next(0, 24)),
+                ConfigName = configNames[random.Next(configNames.Count)],
+                Status = status,
+                Duration = random.Next(10, 300),
+                TotalProjects = totalProjects,
+                PassedProjects = passedProjects,
+                FailedProjects = totalProjects - passedProjects,
+                SuccessRate = (double)passedProjects / totalProjects * 100
+            });
+        }
+
+        return history.OrderByDescending(h => h.Timestamp).ToList();
+    }
+
+    public class ExecutionHistoryItem
+    {
+        public string Id { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+        public string ConfigName { get; set; } = "";
+        public string Status { get; set; } = "";
+        public double Duration { get; set; }
+        public int TotalProjects { get; set; }
+        public int PassedProjects { get; set; }
+        public int FailedProjects { get; set; }
+        public double SuccessRate { get; set; }
+    }
+}

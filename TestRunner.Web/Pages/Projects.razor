@@ -1,0 +1,372 @@
+@page "/projects"
+@using TestRunner.Models
+@using TestRunner.Services
+@using TestRunner.Web.Services
+@inject ConfigurationService ConfigService
+@inject ProjectDetector ProjectDetector
+
+<PageTitle>Projects - TestRunner</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">
+                <i class="fas fa-project-diagram me-2"></i>
+                Projects
+            </h1>
+            <p class="text-muted">View and manage all detected projects across configurations</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" @onclick="DetectNewProjects">
+                <i class="fas fa-search me-2"></i>Detect Projects
+            </button>
+        </div>
+    </div>
+
+    <!-- Detection Form -->
+    @if (showDetectionForm)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Auto-Detect Projects</h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Directory Path</label>
+                        <input type="text" class="form-control" @bind="detectionPath" placeholder="/path/to/projects" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max Depth</label>
+                        <input type="number" class="form-control" @bind="detectionDepth" min="1" max="10" />
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-success w-100" @onclick="ExecuteDetection" disabled="@isDetecting">
+                            @if (isDetecting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Detecting...</text>
+                            }
+                            else
+                            {
+                                <i class="fas fa-search me-2"></i>
+                                <text>Scan</text>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Projects</h6>
+                    <h3 class="mb-0">@allProjects.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Project Types</h6>
+                    <h3 class="mb-0">@GetProjectTypeCount()</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Configurations</h6>
+                    <h3 class="mb-0">@configurations.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Enabled Projects</h6>
+                    <h3 class="mb-0 text-success">@GetEnabledProjectsCount()</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Configuration</label>
+                    <select class="form-select" @bind="selectedConfig">
+                        <option value="">All Configurations</option>
+                        @foreach (var config in configurations)
+                        {
+                            <option value="@config.Name">@config.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Project Type</label>
+                    <select class="form-select" @bind="selectedType">
+                        <option value="">All Types</option>
+                        @foreach (var type in GetProjectTypes())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" class="form-control" @bind="searchQuery" placeholder="Search projects..." />
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" @onclick="ApplyFilters">
+                        <i class="fas fa-filter me-2"></i>Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Projects Grid -->
+    @if (!filteredProjects.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No projects found</h5>
+                <p class="text-muted">Try adjusting your filters or detect new projects</p>
+                <button class="btn btn-primary" @onclick="DetectNewProjects">
+                    <i class="fas fa-search me-2"></i>Detect Projects
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var project in filteredProjects)
+            {
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 project-card @(project.Enabled ? "" : "disabled")">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 class="card-title mb-1">@project.Name</h5>
+                                    <small class="text-muted">@project.ConfigName</small>
+                                </div>
+                                <span class="badge @GetProjectTypeBadgeClass(project.Type)">
+                                    @GetProjectTypeIcon(project.Type) @project.Type
+                                </span>
+                            </div>
+
+                            <p class="card-text text-muted small mb-3">
+                                <i class="fas fa-folder me-1"></i>
+                                @project.WorkingDirectory
+                            </p>
+
+                            @if (project.Tags.Any())
+                            {
+                                <div class="mb-3">
+                                    @foreach (var tag in project.Tags)
+                                    {
+                                        <span class="badge bg-secondary me-1">@tag</span>
+                                    }
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">Commands (@project.Commands.Count):</small>
+                                @foreach (var cmd in project.Commands.Take(3))
+                                {
+                                    <code class="d-block small mb-1">@cmd.Command</code>
+                                }
+                                @if (project.Commands.Count > 3)
+                                {
+                                    <small class="text-muted">...and @(project.Commands.Count - 3) more</small>
+                                }
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox"
+                                           checked="@project.Enabled"
+                                           @onchange="() => ToggleProjectEnabled(project)" />
+                                    <label class="form-check-label">Enabled</label>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-play me-1"></i>Run
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ConfigInfo> configurations = new();
+    private List<ProjectInfo> allProjects = new();
+    private List<ProjectInfo> filteredProjects = new();
+
+    private string selectedConfig = "";
+    private string selectedType = "";
+    private string searchQuery = "";
+
+    private bool showDetectionForm = false;
+    private bool isDetecting = false;
+    private string detectionPath = ".";
+    private int detectionDepth = 3;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        ApplyFilters();
+    }
+
+    private async Task LoadData()
+    {
+        configurations = await ConfigService.GetAllConfigurationsAsync();
+        allProjects = new List<ProjectInfo>();
+
+        // Load projects from all configurations
+        foreach (var configInfo in configurations)
+        {
+            var config = await ConfigService.GetConfigurationAsync(configInfo.Name);
+            if (config != null)
+            {
+                foreach (var project in config.Projects)
+                {
+                    allProjects.Add(new ProjectInfo
+                    {
+                        Name = project.Name,
+                        Type = project.Type.ToString(),
+                        WorkingDirectory = project.WorkingDirectory,
+                        Enabled = project.Enabled,
+                        Tags = project.Tags,
+                        Commands = project.Commands,
+                        ConfigName = configInfo.Name
+                    });
+                }
+            }
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredProjects = allProjects.AsEnumerable();
+
+        // Filter by configuration
+        if (!string.IsNullOrEmpty(selectedConfig))
+        {
+            filteredProjects = filteredProjects.Where(p => p.ConfigName == selectedConfig).ToList();
+        }
+
+        // Filter by type
+        if (!string.IsNullOrEmpty(selectedType))
+        {
+            filteredProjects = filteredProjects.Where(p => p.Type == selectedType).ToList();
+        }
+
+        // Filter by search query
+        if (!string.IsNullOrEmpty(searchQuery))
+        {
+            filteredProjects = filteredProjects
+                .Where(p => p.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                           p.WorkingDirectory.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        filteredProjects = filteredProjects.ToList();
+    }
+
+    private void DetectNewProjects()
+    {
+        showDetectionForm = !showDetectionForm;
+    }
+
+    private async Task ExecuteDetection()
+    {
+        isDetecting = true;
+        try
+        {
+            var detectedProjects = await ProjectDetector.DetectProjectsAsync(detectionPath, detectionDepth);
+            Console.WriteLine($"Detected {detectedProjects.Count} projects");
+            // TODO: Allow user to add detected projects to a configuration
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error detecting projects: {ex.Message}");
+        }
+        finally
+        {
+            isDetecting = false;
+        }
+    }
+
+    private void ToggleProjectEnabled(ProjectInfo project)
+    {
+        project.Enabled = !project.Enabled;
+        // TODO: Save changes to configuration
+    }
+
+    private int GetProjectTypeCount()
+    {
+        return allProjects.Select(p => p.Type).Distinct().Count();
+    }
+
+    private int GetEnabledProjectsCount()
+    {
+        return allProjects.Count(p => p.Enabled);
+    }
+
+    private List<string> GetProjectTypes()
+    {
+        return allProjects.Select(p => p.Type).Distinct().OrderBy(t => t).ToList();
+    }
+
+    private string GetProjectTypeBadgeClass(string type)
+    {
+        return type switch
+        {
+            "DotNet" => "bg-primary",
+            "Node" => "bg-success",
+            "Python" => "bg-warning",
+            "Go" => "bg-info",
+            "Rust" => "bg-danger",
+            "Java" => "bg-secondary",
+            _ => "bg-dark"
+        };
+    }
+
+    private string GetProjectTypeIcon(string type)
+    {
+        return type switch
+        {
+            "DotNet" => "🔷",
+            "Node" => "🟢",
+            "Python" => "🐍",
+            "Go" => "🐹",
+            "Rust" => "🦀",
+            "Java" => "☕",
+            "PHP" => "🐘",
+            "Ruby" => "💎",
+            _ => "📦"
+        };
+    }
+
+    public class ProjectInfo
+    {
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string WorkingDirectory { get; set; } = "";
+        public bool Enabled { get; set; }
+        public List<string> Tags { get; set; } = new();
+        public List<TestCommand> Commands { get; set; } = new();
+        public string ConfigName { get; set; } = "";
+    }
+}

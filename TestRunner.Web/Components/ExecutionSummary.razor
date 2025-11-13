@@ -1,0 +1,445 @@
+@using TestRunner.Models
+
+<div class="card execution-summary @(IsSuccess ? "border-success" : IsFailed ? "border-danger" : "")">
+    <div class="card-header @(IsSuccess ? "bg-success text-white" : IsFailed ? "bg-danger text-white" : "")">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                @if (IsSuccess)
+                {
+                    <i class="fas fa-check-circle me-2"></i>
+                    <text>All Tests Passed</text>
+                }
+                else if (IsFailed)
+                {
+                    <i class="fas fa-times-circle me-2"></i>
+                    <text>Tests Failed</text>
+                }
+                else if (IsRunning)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <text>Tests Running...</text>
+                }
+                else
+                {
+                    <i class="fas fa-info-circle me-2"></i>
+                    <text>Execution Summary</text>
+                }
+            </h5>
+            @if (Duration > 0)
+            {
+                <span class="badge bg-light text-dark">
+                    <i class="fas fa-clock me-1"></i>@FormatDuration(Duration)
+                </span>
+            }
+        </div>
+    </div>
+
+    <div class="card-body">
+        <!-- Statistics Grid -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon text-primary">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@TotalProjects</div>
+                        <div class="stat-label">Total Projects</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon text-success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@PassedProjects</div>
+                        <div class="stat-label">Passed</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon text-danger">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@FailedProjects</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="stat-icon @(SuccessRate >= 80 ? "text-success" : SuccessRate >= 50 ? "text-warning" : "text-danger")">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-value">@SuccessRate.ToString("F1")%</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Rate Progress -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted">Overall Success Rate</small>
+                <small class="text-muted">@PassedProjects / @TotalProjects</small>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar @(SuccessRate >= 80 ? "bg-success" : SuccessRate >= 50 ? "bg-warning" : "bg-danger")"
+                     role="progressbar"
+                     style="width: @SuccessRate%">
+                    @SuccessRate.ToString("F1")%
+                </div>
+            </div>
+        </div>
+
+        @if (ShowProjectBreakdown && ProjectResults.Any())
+        {
+            <div class="project-breakdown">
+                <h6 class="mb-3">Project Results</h6>
+                <div class="list-group">
+                    @foreach (var result in ProjectResults)
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    @if (result.IsSuccess)
+                                    {
+                                        <i class="fas fa-check-circle text-success me-2"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-times-circle text-danger me-2"></i>
+                                    }
+                                    <strong>@result.ProjectName</strong>
+                                    <span class="badge bg-secondary ms-2">@result.ProjectType</span>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        @FormatDuration(result.Duration)
+                                    </small>
+                                    @if (result.CommandResults.Any())
+                                    {
+                                        <small class="text-muted ms-3">
+                                            @result.CommandResults.Count(c => c.ExitCode == 0) / @result.CommandResults.Count commands
+                                        </small>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (ShowCommandDetails && result.CommandResults.Any())
+                            {
+                                <div class="mt-2 ms-4">
+                                    @foreach (var cmd in result.CommandResults)
+                                    {
+                                        <div class="command-result-item">
+                                            @if (cmd.ExitCode == 0)
+                                            {
+                                                <i class="fas fa-check text-success me-2"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times text-danger me-2"></i>
+                                            }
+                                            <code class="small">@cmd.Command</code>
+                                            <small class="text-muted ms-2">(@FormatDuration(cmd.Duration))</small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(result.Error))
+                            {
+                                <div class="alert alert-danger alert-sm mt-2 mb-0">
+                                    <small><i class="fas fa-exclamation-triangle me-1"></i>@result.Error</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (ShowTimeline && Timeline.Any())
+        {
+            <div class="execution-timeline mt-4">
+                <h6 class="mb-3">Execution Timeline</h6>
+                @foreach (var item in Timeline)
+                {
+                    <div class="timeline-item @(item.IsSuccess ? "success" : item.IsFailed ? "failed" : "")">
+                        <div class="timeline-marker">
+                            @if (item.IsSuccess)
+                            {
+                                <i class="fas fa-check"></i>
+                            }
+                            else if (item.IsFailed)
+                            {
+                                <i class="fas fa-times"></i>
+                            }
+                            else
+                            {
+                                <i class="fas fa-circle"></i>
+                            }
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-time">@item.Timestamp.ToString("HH:mm:ss")</div>
+                            <div class="timeline-text">@item.Message</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (ShowActions)
+    {
+        <div class="card-footer">
+            <div class="d-flex justify-content-between">
+                <div>
+                    @if (OnViewReport.HasDelegate)
+                    {
+                        <button class="btn btn-sm btn-outline-primary" @onclick="OnViewReport">
+                            <i class="fas fa-file-alt me-1"></i>View Full Report
+                        </button>
+                    }
+                    @if (OnExportResults.HasDelegate)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="OnExportResults">
+                            <i class="fas fa-download me-1"></i>Export
+                        </button>
+                    }
+                </div>
+                <div>
+                    @if (OnRunAgain.HasDelegate && !IsRunning)
+                    {
+                        <button class="btn btn-sm btn-primary" @onclick="OnRunAgain">
+                            <i class="fas fa-redo me-1"></i>Run Again
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .execution-summary {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .stat-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+        opacity: 0.8;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    .command-result-item {
+        padding: 0.25rem 0;
+        font-size: 0.875rem;
+    }
+
+    .execution-timeline {
+        position: relative;
+    }
+
+    .timeline-item {
+        display: flex;
+        position: relative;
+        padding-bottom: 1.5rem;
+    }
+
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+
+    .timeline-item:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 0.875rem;
+        top: 2rem;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+
+    .timeline-item.success .timeline-marker {
+        background: #198754;
+        color: white;
+    }
+
+    .timeline-item.failed .timeline-marker {
+        background: #dc3545;
+        color: white;
+    }
+
+    .timeline-marker {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 50%;
+        background: #6c757d;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        flex-shrink: 0;
+        margin-right: 1rem;
+        z-index: 1;
+    }
+
+    .timeline-content {
+        flex-grow: 1;
+        padding-top: 0.125rem;
+    }
+
+    .timeline-time {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-weight: 600;
+    }
+
+    .timeline-text {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int TotalProjects { get; set; }
+
+    [Parameter]
+    public int PassedProjects { get; set; }
+
+    [Parameter]
+    public int FailedProjects { get; set; }
+
+    [Parameter]
+    public double Duration { get; set; }
+
+    [Parameter]
+    public double SuccessRate { get; set; }
+
+    [Parameter]
+    public bool IsRunning { get; set; }
+
+    [Parameter]
+    public bool IsSuccess { get; set; }
+
+    [Parameter]
+    public bool IsFailed { get; set; }
+
+    [Parameter]
+    public bool ShowProjectBreakdown { get; set; } = true;
+
+    [Parameter]
+    public bool ShowCommandDetails { get; set; } = false;
+
+    [Parameter]
+    public bool ShowTimeline { get; set; } = false;
+
+    [Parameter]
+    public bool ShowActions { get; set; } = true;
+
+    [Parameter]
+    public List<ProjectResultSummary> ProjectResults { get; set; } = new();
+
+    [Parameter]
+    public List<TimelineItem> Timeline { get; set; } = new();
+
+    [Parameter]
+    public EventCallback OnViewReport { get; set; }
+
+    [Parameter]
+    public EventCallback OnExportResults { get; set; }
+
+    [Parameter]
+    public EventCallback OnRunAgain { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Auto-calculate success rate if not provided
+        if (SuccessRate == 0 && TotalProjects > 0)
+        {
+            SuccessRate = (double)PassedProjects / TotalProjects * 100;
+        }
+
+        // Auto-determine success/failed state
+        if (!IsRunning)
+        {
+            IsSuccess = TotalProjects > 0 && FailedProjects == 0;
+            IsFailed = FailedProjects > 0;
+        }
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        if (seconds < 60)
+        {
+            return $"{seconds:F1}s";
+        }
+
+        var minutes = (int)(seconds / 60);
+        var remainingSeconds = seconds % 60;
+        return $"{minutes}m {remainingSeconds:F0}s";
+    }
+
+    public class ProjectResultSummary
+    {
+        public string ProjectName { get; set; } = "";
+        public string ProjectType { get; set; } = "";
+        public bool IsSuccess { get; set; }
+        public double Duration { get; set; }
+        public string Error { get; set; } = "";
+        public List<CommandResultSummary> CommandResults { get; set; } = new();
+    }
+
+    public class CommandResultSummary
+    {
+        public string Command { get; set; } = "";
+        public int ExitCode { get; set; }
+        public double Duration { get; set; }
+    }
+
+    public class TimelineItem
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; } = "";
+        public bool IsSuccess { get; set; }
+        public bool IsFailed { get; set; }
+    }
+}

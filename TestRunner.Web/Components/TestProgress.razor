@@ -1,0 +1,329 @@
+@using TestRunner.Models
+
+<div class="test-progress-container">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">@Title</h6>
+            @if (ShowPercentage)
+            {
+                <span class="badge @GetStatusBadgeClass()">@Percentage%</span>
+            }
+        </div>
+    }
+
+    <div class="progress @(Animated ? "progress-animated" : "")" style="height: @(Height)px;">
+        <div class="progress-bar @GetProgressBarClass() @(Animated ? "progress-bar-striped progress-bar-animated" : "")"
+             role="progressbar"
+             style="width: @Percentage%; transition: width 0.5s ease;"
+             aria-valuenow="@Percentage"
+             aria-valuemin="0"
+             aria-valuemax="100">
+            @if (ShowLabel)
+            {
+                <span>@GetProgressLabel()</span>
+            }
+        </div>
+    </div>
+
+    @if (ShowDetails && (Total > 0 || !string.IsNullOrEmpty(StatusText)))
+    {
+        <div class="mt-2">
+            <div class="d-flex justify-content-between align-items-center">
+                @if (Total > 0)
+                {
+                    <small class="text-muted">
+                        <i class="fas fa-check-circle text-success me-1"></i>@Completed
+                        @if (Failed > 0)
+                        {
+                            <span class="ms-2">
+                                <i class="fas fa-times-circle text-danger me-1"></i>@Failed
+                            </span>
+                        }
+                        <span class="ms-2 text-muted">of @Total</span>
+                    </small>
+                }
+                @if (!string.IsNullOrEmpty(StatusText))
+                {
+                    <small class="text-muted">
+                        @if (IsRunning)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        @StatusText
+                    </small>
+                }
+            </div>
+
+            @if (ShowDuration && Duration > 0)
+            {
+                <small class="text-muted">
+                    <i class="fas fa-clock me-1"></i>
+                    Duration: @FormatDuration(Duration)
+                </small>
+            }
+        </div>
+    }
+
+    @if (ShowSteps && Steps.Any())
+    {
+        <div class="mt-3">
+            @foreach (var step in Steps)
+            {
+                <div class="step-item @(step.IsCompleted ? "completed" : "") @(step.IsActive ? "active" : "") @(step.IsFailed ? "failed" : "")">
+                    <div class="step-icon">
+                        @if (step.IsCompleted)
+                        {
+                            <i class="fas fa-check-circle text-success"></i>
+                        }
+                        else if (step.IsFailed)
+                        {
+                            <i class="fas fa-times-circle text-danger"></i>
+                        }
+                        else if (step.IsActive)
+                        {
+                            <span class="spinner-border spinner-border-sm text-primary"></span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-circle text-muted"></i>
+                        }
+                    </div>
+                    <div class="step-content">
+                        <div class="step-title">@step.Title</div>
+                        @if (!string.IsNullOrEmpty(step.Description))
+                        {
+                            <div class="step-description">@step.Description</div>
+                        }
+                        @if (step.Duration > 0)
+                        {
+                            <div class="step-duration">@FormatDuration(step.Duration)</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .test-progress-container {
+        width: 100%;
+    }
+
+    .progress-animated {
+        overflow: hidden;
+    }
+
+    .step-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 0.75rem 0;
+        border-left: 2px solid #dee2e6;
+        margin-left: 0.5rem;
+        padding-left: 1.5rem;
+        position: relative;
+    }
+
+    .step-item:last-child {
+        border-left-color: transparent;
+    }
+
+    .step-item.completed {
+        border-left-color: #198754;
+    }
+
+    .step-item.active {
+        border-left-color: #0d6efd;
+    }
+
+    .step-item.failed {
+        border-left-color: #dc3545;
+    }
+
+    .step-icon {
+        position: absolute;
+        left: -0.6rem;
+        top: 0.75rem;
+        background: white;
+        padding: 0 0.25rem;
+    }
+
+    .step-content {
+        flex-grow: 1;
+    }
+
+    .step-title {
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .step-description {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    .step-duration {
+        font-size: 0.75rem;
+        color: #adb5bd;
+        margin-top: 0.25rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public int Completed { get; set; } = 0;
+
+    [Parameter]
+    public int Failed { get; set; } = 0;
+
+    [Parameter]
+    public int Total { get; set; } = 0;
+
+    [Parameter]
+    public int Percentage { get; set; } = 0;
+
+    [Parameter]
+    public bool IsRunning { get; set; } = false;
+
+    [Parameter]
+    public string StatusText { get; set; } = "";
+
+    [Parameter]
+    public double Duration { get; set; } = 0;
+
+    [Parameter]
+    public int Height { get; set; } = 25;
+
+    [Parameter]
+    public bool Animated { get; set; } = true;
+
+    [Parameter]
+    public bool ShowLabel { get; set; } = true;
+
+    [Parameter]
+    public bool ShowPercentage { get; set; } = true;
+
+    [Parameter]
+    public bool ShowDetails { get; set; } = true;
+
+    [Parameter]
+    public bool ShowDuration { get; set; } = false;
+
+    [Parameter]
+    public bool ShowSteps { get; set; } = false;
+
+    [Parameter]
+    public List<ProgressStep> Steps { get; set; } = new();
+
+    [Parameter]
+    public ProgressStyle Style { get; set; } = ProgressStyle.Auto;
+
+    protected override void OnParametersSet()
+    {
+        // Auto-calculate percentage if not provided
+        if (Percentage == 0 && Total > 0)
+        {
+            Percentage = (int)((double)(Completed + Failed) / Total * 100);
+        }
+    }
+
+    private string GetProgressBarClass()
+    {
+        if (Style != ProgressStyle.Auto)
+        {
+            return Style switch
+            {
+                ProgressStyle.Success => "bg-success",
+                ProgressStyle.Warning => "bg-warning",
+                ProgressStyle.Danger => "bg-danger",
+                ProgressStyle.Info => "bg-info",
+                _ => "bg-primary"
+            };
+        }
+
+        // Auto-determine style based on state
+        if (Failed > 0)
+        {
+            return "bg-danger";
+        }
+
+        if (IsRunning)
+        {
+            return "bg-primary";
+        }
+
+        if (Percentage == 100)
+        {
+            return "bg-success";
+        }
+
+        return "bg-primary";
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        if (Failed > 0)
+        {
+            return "bg-danger";
+        }
+
+        if (Percentage == 100)
+        {
+            return "bg-success";
+        }
+
+        if (IsRunning)
+        {
+            return "bg-primary";
+        }
+
+        return "bg-secondary";
+    }
+
+    private string GetProgressLabel()
+    {
+        if (Total > 0)
+        {
+            return $"{Completed + Failed} / {Total}";
+        }
+
+        return $"{Percentage}%";
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        if (seconds < 60)
+        {
+            return $"{seconds:F1}s";
+        }
+
+        var minutes = (int)(seconds / 60);
+        var remainingSeconds = seconds % 60;
+        return $"{minutes}m {remainingSeconds:F0}s";
+    }
+
+    public class ProgressStep
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public bool IsCompleted { get; set; }
+        public bool IsActive { get; set; }
+        public bool IsFailed { get; set; }
+        public double Duration { get; set; }
+    }
+
+    public enum ProgressStyle
+    {
+        Auto,
+        Primary,
+        Success,
+        Warning,
+        Danger,
+        Info
+    }
+}

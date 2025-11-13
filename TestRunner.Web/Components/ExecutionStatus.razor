@@ -1,0 +1,33 @@
+@inject TestExecutionService ExecutionService
+@implements IDisposable
+
+<div class="execution-status">
+    @if (ExecutionService.IsRunning)
+    {
+        <span class="badge bg-primary">
+            <i class="fas fa-spinner fa-spin"></i> Running
+        </span>
+    }
+    else
+    {
+        <span class="badge bg-success">
+            <i class="fas fa-check-circle"></i> Idle
+        </span>
+    }
+</div>
+
+@code {
+    private System.Timers.Timer? timer;
+
+    protected override void OnInitialized()
+    {
+        timer = new System.Timers.Timer(1000); // Update every second
+        timer.Elapsed += async (sender, e) => await InvokeAsync(StateHasChanged);
+        timer.Start();
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}
