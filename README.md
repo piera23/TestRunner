@@ -4,6 +4,17 @@ Un potente ed estensibile test runner multipiattaforma per gestire ed eseguire t
 
 [![.NET Version](https://img.shields.io/badge/.NET-9.0-blue)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![NuGet Package](https://img.shields.io/badge/NuGet-Package%20Available-blue)](https://www.nuget.org/packages/TestRunner/)
+
+## 📦 Installazione Rapida
+
+```bash
+# Installa come .NET Global Tool
+dotnet tool install --global TestRunner
+
+# Usa subito il comando
+testrunner --help
+```
 
 ## 📋 Indice
 
@@ -12,6 +23,7 @@ Un potente ed estensibile test runner multipiattaforma per gestire ed eseguire t
 - [Requisiti](#-requisiti)
 - [Installazione](#-installazione)
 - [Quick Start](#-quick-start)
+- [Uso come Libreria](#-uso-come-libreria)
 - [Comandi](#-comandi)
 - [Configurazione](#-configurazione)
 - [Esempi](#-esempi)
@@ -124,11 +136,27 @@ await connection.start();
 
 ## 🚀 Installazione
 
-### Da sorgente
+### Opzione 1: Pacchetto NuGet (Raccomandato) ⭐
+
+```bash
+# Installa come .NET Global Tool da NuGet
+dotnet tool install --global TestRunner
+
+# Usa il comando da qualsiasi directory
+testrunner --help
+
+# Aggiorna alla versione più recente
+dotnet tool update --global TestRunner
+
+# Disinstalla
+dotnet tool uninstall --global TestRunner
+```
+
+### Opzione 2: Da sorgente
 
 ```bash
 # Clona la repository
-git clone https://github.com/yourusername/TestRunner.git
+git clone https://github.com/piera23/TestRunner.git
 cd TestRunner
 
 # Build del progetto
@@ -141,15 +169,17 @@ dotnet publish TestRunner/TestRunner.csproj -c Release -o ./publish
 export PATH=$PATH:$(pwd)/publish
 ```
 
-### Come tool globale .NET
+### Opzione 3: Build come pacchetto NuGet locale
 
 ```bash
-# Installa come tool globale
-dotnet tool install --global TestRunner
+# Crea il pacchetto NuGet
+./build-package.sh 1.0.0
 
-# Ora puoi usare 'testrunner' da qualsiasi directory
-testrunner --help
+# Installa dalla build locale
+dotnet tool install --global --add-source ./TestRunner/nupkg TestRunner
 ```
+
+> **📚 Guida completa NuGet**: Vedi [NUGET_GUIDE.md](NUGET_GUIDE.md) per creare e pubblicare il pacchetto
 
 ## 🏁 Quick Start
 
@@ -192,6 +222,197 @@ testrunner run --parallel --max-parallel 4
 
 # Con report HTML
 testrunner run --report results.html --format Html
+```
+
+## 📚 Uso come Libreria
+
+TestRunner può essere integrato nei tuoi progetti .NET come libreria NuGet.
+
+### Installazione nel Progetto
+
+```bash
+# Aggiungi il pacchetto al tuo progetto
+dotnet add package TestRunner
+```
+
+### Esempio Base
+
+```csharp
+using Microsoft.Extensions.Logging;
+using TestRunner.Models;
+using TestRunner.Services;
+
+// Setup logging
+var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+var logger = loggerFactory.CreateLogger<TestExecutor>();
+
+// Crea i servizi
+var configService = new ConfigService(loggerFactory.CreateLogger<ConfigService>());
+var executor = new TestExecutor(logger);
+
+// Carica la configurazione
+var config = await configService.LoadConfigAsync("testrunner.json");
+
+// Esegui i test
+var result = await executor.ExecuteAllProjectsAsync(config);
+
+// Verifica i risultati
+if (result.IsSuccess)
+{
+    Console.WriteLine($"✅ Tutti i test passati in {result.TotalDuration.TotalSeconds}s");
+}
+else
+{
+    Console.WriteLine($"❌ {result.Summary.FailedProjects} progetti falliti");
+}
+```
+
+### Esecuzione Singolo Progetto
+
+```csharp
+var project = new ProjectConfig
+{
+    Name = "my-web-app",
+    Path = "./src/web",
+    Type = ProjectType.Node,
+    Commands = new List<string> { "npm test", "npm run lint" },
+    TimeoutMinutes = 10,
+    Enabled = true
+};
+
+var result = await executor.ExecuteProjectAsync(project);
+
+Console.WriteLine($"Progetto: {result.ProjectName}");
+Console.WriteLine($"Status: {result.Status}");
+Console.WriteLine($"Durata: {result.Duration.TotalSeconds}s");
+
+foreach (var cmd in result.CommandResults)
+{
+    Console.WriteLine($"  Comando: {cmd.Command}");
+    Console.WriteLine($"  Exit Code: {cmd.ExitCode}");
+    Console.WriteLine($"  Output: {cmd.Output}");
+}
+```
+
+### Auto-Detection Progetti
+
+```csharp
+var detector = new ProjectDetector(loggerFactory.CreateLogger<ProjectDetector>());
+
+// Rileva progetti automaticamente
+var projects = await detector.DetectProjectsAsync("./workspace", maxDepth: 3);
+
+foreach (var project in projects)
+{
+    Console.WriteLine($"Trovato: {project.Name} ({project.Type})");
+    Console.WriteLine($"  Path: {project.Path}");
+    Console.WriteLine($"  Comandi: {string.Join(", ", project.Commands)}");
+}
+```
+
+### Generazione Report
+
+```csharp
+var reportGenerator = new ReportGenerator(loggerFactory.CreateLogger<ReportGenerator>());
+
+// Genera report console
+var consoleReport = reportGenerator.GenerateConsoleReport(result);
+Console.WriteLine(consoleReport);
+
+// Salva report HTML
+await reportGenerator.SaveReportAsync(result, OutputFormat.Html, "report.html");
+
+// Salva report JSON
+await reportGenerator.SaveReportAsync(result, OutputFormat.Json, "report.json");
+
+// Salva report XML (JUnit)
+await reportGenerator.SaveReportAsync(result, OutputFormat.Xml, "report.xml");
+```
+
+### Integrazione con CI/CD
+
+```csharp
+public class CITestRunner
+{
+    private readonly TestExecutor _executor;
+    private readonly ConfigService _configService;
+
+    public async Task<int> RunTestsAsync(string configPath)
+    {
+        try
+        {
+            var config = await _configService.LoadConfigAsync(configPath);
+            var result = await _executor.ExecuteAllProjectsAsync(config);
+
+            // Report per CI/CD
+            await SaveCIReports(result);
+
+            // Exit code basato sul risultato
+            return result.IsSuccess ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private async Task SaveCIReports(TestExecutionResult result)
+    {
+        // JUnit XML per Jenkins/GitLab
+        await _reportGenerator.SaveReportAsync(result, OutputFormat.Xml, "junit.xml");
+
+        // JSON per parsing
+        await _reportGenerator.SaveReportAsync(result, OutputFormat.Json, "results.json");
+
+        // HTML per artifact
+        await _reportGenerator.SaveReportAsync(result, OutputFormat.Html, "report.html");
+    }
+}
+```
+
+### Configurazione Programmatica
+
+```csharp
+var config = new TestRunnerConfig
+{
+    ParallelExecution = true,
+    MaxParallelProjects = 4,
+    StopOnFirstFailure = false,
+    GlobalTimeoutMinutes = 60,
+    Projects = new List<ProjectConfig>
+    {
+        new ProjectConfig
+        {
+            Name = "frontend",
+            Path = "./src/frontend",
+            Type = ProjectType.Node,
+            Commands = new List<string> { "npm test", "npm run build" },
+            Tags = new List<string> { "ui", "critical" },
+            TimeoutMinutes = 15,
+            Environment = new Dictionary<string, string>
+            {
+                { "NODE_ENV", "test" },
+                { "CI", "true" }
+            }
+        },
+        new ProjectConfig
+        {
+            Name = "backend",
+            Path = "./src/backend",
+            Type = ProjectType.DotNet,
+            Commands = new List<string> { "dotnet test", "dotnet build" },
+            Tags = new List<string> { "api", "critical" },
+            TimeoutMinutes = 10
+        }
+    }
+};
+
+// Salva la configurazione
+await configService.SaveConfigAsync(config, "my-config.json");
+
+// Esegui
+var result = await executor.ExecuteAllProjectsAsync(config);
 ```
 
 ## 📝 Comandi
